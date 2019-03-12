@@ -28,39 +28,15 @@ COPYRIGHT: (C) 2019 Brendan Harmon and the GRASS Development Team
 #% guisection: Basic
 #%end
 
-#%option G_OPT_R_OUTPUT
-#% key: erosion
-#% answer: erosion
-#% required: yes
-#% description: Erosion map
-#% guisection: Basic
-#%end
-
-#%option G_OPT_R_OUTPUT
-#% key: flow_accumulation
-#% answer: flow_accumulation
-#% required: yes
-#% description: Flow accumulation map
-#% guisection: Basic
-#%end
-
-#%option G_OPT_R_OUTPUT
-#% key: ls_factor
-#% answer: ls_factor
-#% description: Dimensionless topographic factor map
-#% required: yes
-#% guisection: Basic
-#%end
-
 #%option
 #% key: model
 #% type: string
-#% required: yes
-#% multiple: no
-#% answer: rusle
 #% options: rusle,usped
-#% description: RUSLE 3D detachment limited model or USPED transport limited model
+#% description: RUSLE3D or USPED erosion model
 #% descriptions:rusle;RUSLE 3D detachment limited model;usped;USPED transport limited model
+#% label: Erosion model
+#% required: yes
+#% answer: rusle
 #% guisection: Basic
 #%end
 
@@ -100,14 +76,6 @@ COPYRIGHT: (C) 2019 Brendan Harmon and the GRASS Development Team
 #% guisection: Input
 #%end
 
-#%option G_OPT_R_INPUT
-#% key: k_factor
-#% description: Soil erodibility factor
-#% label: K factor
-#% required: no
-#% guisection: Input
-#%end
-
 #%option
 #% key: k_factor_value
 #% type: double
@@ -119,9 +87,9 @@ COPYRIGHT: (C) 2019 Brendan Harmon and the GRASS Development Team
 #%end
 
 #%option G_OPT_R_INPUT
-#% key: c_factor
-#% description: Land cover factor
-#% label: C factor
+#% key: k_factor
+#% description: Soil erodibility factor
+#% label: K factor
 #% required: no
 #% guisection: Input
 #%end
@@ -136,32 +104,61 @@ COPYRIGHT: (C) 2019 Brendan Harmon and the GRASS Development Team
 #% guisection: Input
 #%end
 
+#%option G_OPT_R_INPUT
+#% key: c_factor
+#% description: Land cover factor
+#% label: C factor
+#% required: no
+#% guisection: Input
+#%end
+
 #%option
-#% key: m
+#% key: m_coeff
 #% type: double
 #% description: Water flow exponent
 #% label: Water flow exponent
 #% answer: 1.5
-#% multiple: no
 #% required: yes
 #% guisection: Input
 #%end
 
 #%option
-#% key: n
+#% key: n_coeff
 #% type: double
 #% description: Slope exponent
 #% label: Slope exponent
 #% answer: 1.2
-#% multiple: no
 #% required: yes
 #% guisection: Input
 #%end
 
-import os
+#%option G_OPT_R_OUTPUT
+#% key: erosion
+#% answer: erosion
+#% required: yes
+#% description: Erosion map
+#% guisection: Output
+#%end
+
+#%option G_OPT_R_OUTPUT
+#% key: flow_accumulation
+#% answer: flow_accumulation
+#% required: yes
+#% description: Flow accumulation map
+#% guisection: Output
+#%end
+
+#%option G_OPT_R_OUTPUT
+#% key: ls_factor
+#% answer: ls_factor
+#% description: Dimensionless topographic factor map
+#% required: yes
+#% guisection: Output
+#%end
+
+
 import sys
 import atexit
-from math import exp
 import grass.script as gscript
 from grass.exceptions import CalledModuleError
 
@@ -194,8 +191,8 @@ def main():
     r_factor_value = options['r_factor_value']
     k_factor_value = options['k_factor_value']
     c_factor_value = options['c_factor_value']
-    m = options['m']
-    n = options['n']
+    m_coeff = options['m_coeff']
+    n_coeff = options['n_coeff']
 
     # check for alternative input parameters
     if not r_factor:
@@ -223,423 +220,419 @@ def main():
 
     # determine type of model and run
     if model == "rusle":
-        rusle(elevation, erosion, flow_accumulation,
-            r_factor, c_factor, k_factor, ls_factor, m, n)
+        rusle(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff)
     if model == "usped":
-        usped(elevation, erosion, flow_accumulation,
-            r_factor, c_factor, k_factor, ls_factor, m, n)
+        usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff)
     atexit.register(cleanup)
     sys.exit(0)
 
 
-    def event_based_r_factor(rain_intensity, rain_duration):
-        """compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1)"""
+def event_based_r_factor(rain_intensity, rain_duration):
+    """compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1)"""
 
-        # assign variables
-        rain_energy = 'rain_energy'
-        rain_volume = 'rain_volume'
-        erosivity = 'erosivity'
-        r_factor = 'r_factor'
+    # assign variables
+    rain_energy = 'rain_energy'
+    rain_volume = 'rain_volume'
+    erosivity = 'erosivity'
+    r_factor = 'r_factor'
 
-        # derive rainfall energy (MJ ha^-1 mm^-1)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{rain_energy}"
-            "=0.29*(1.-(0.72*exp(-0.05*{rain_intensity})))".format(
-                rain_energy=rain_energy,
-                rain_intensity=rain_intensity),
-            overwrite=True)
+    # derive rainfall energy (MJ ha^-1 mm^-1)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{rain_energy}"
+        "=0.29*(1.-(0.72*exp(-0.05*{rain_intensity})))".format(
+            rain_energy=rain_energy,
+            rain_intensity=rain_intensity),
+        overwrite=True)
 
-        # derive rainfall volume
-        """
-        rainfall volume (mm)
-        = rainfall intensity (mm/hr)
-        * (rainfall duration (min)
-        * (1 hr / 60 min))
-        """
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{rain_volume}"
-            "= {rain_intensity}"
-            "*({rain_duration}"
-            "/60.)".format(
-                rain_volume=rain_volume,
-                rain_intensity=rain_intensity,
-                rain_duration=rain_duration),
-            overwrite=True)
+    # derive rainfall volume
+    """
+    rainfall volume (mm)
+    = rainfall intensity (mm/hr)
+    * (rainfall duration (min)
+    * (1 hr / 60 min))
+    """
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{rain_volume}"
+        "= {rain_intensity}"
+        "*({rain_duration}"
+        "/60.)".format(
+            rain_volume=rain_volume,
+            rain_intensity=rain_intensity,
+            rain_duration=rain_duration),
+        overwrite=True)
 
-        # derive event erosivity index (MJ mm ha^-1 hr^-1)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{erosivity}"
-            "=({rain_energy}"
-            "*{rain_volume})"
-            "*{rain_intensity}"
-            "*1.".format(
-                erosivity=erosivity,
-                rain_energy=rain_energy,
-                rain_volume=rain_volume,
-                rain_intensity=rain_intensity),
-            overwrite=True)
+    # derive event erosivity index (MJ mm ha^-1 hr^-1)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{erosivity}"
+        "=({rain_energy}"
+        "*{rain_volume})"
+        "*{rain_intensity}"
+        "*1.".format(
+            erosivity=erosivity,
+            rain_energy=rain_energy,
+            rain_volume=rain_volume,
+            rain_intensity=rain_intensity),
+        overwrite=True)
 
-        # multiply by rainfall duration in seconds (MJ mm ha^-1 hr^-1 s^-1)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{r_factor}"
-            "={erosivity}"
-            "/({rain_duration}"
-            "*60.)".format(
-                r_factor=r_factor,
-                erosivity=erosivity,
-                rain_duration=rain_duration),
-            overwrite=True)
+    # multiply by rainfall duration in seconds (MJ mm ha^-1 hr^-1 s^-1)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{r_factor}"
+        "={erosivity}"
+        "/({rain_duration}"
+        "*60.)".format(
+            r_factor=r_factor,
+            erosivity=erosivity,
+            rain_duration=rain_duration),
+        overwrite=True)
 
-        # remove temporary maps
-        gscript.run_command(
-            'g.remove',
-            type='raster',
-            name=['rain_energy',
-                'rain_volume',
-                'erosivity'],
-            flags='f')
+    # remove temporary maps
+    gscript.run_command(
+        'g.remove',
+        type='raster',
+        name=['rain_energy',
+              'rain_volume',
+              'erosivity'],
+        flags='f')
 
-        return r_factor
+    return r_factor
 
 
-    def rusle(elevation, erosion, flow_accumulation,
-        r_factor, c_factor, k_factor, ls_factor, m, n):
-        """The RUSLE3D
-        (Revised Universal Soil Loss Equation for Complex Terrain) model
-        for detachment limited soil erosion regimes"""
+def rusle(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff):
+    """The RUSLE3D
+    (Revised Universal Soil Loss Equation for Complex Terrain) model
+    for detachment limited soil erosion regimes"""
 
-        # assign variables
-        slope = 'slope'
-        grow_slope = 'grow_slope'
-        flowacc = 'flowacc'
-        sedflow = 'sedflow'
-        erosion = 'erosion'
+    # assign variables
+    slope = 'slope'
+    grow_slope = 'grow_slope'
+    flowacc = 'flowacc'
+    sedflow = 'sedflow'
 
-        # compute slope
-        gscript.run_command(
-            'r.slope.aspect',
-            elevation=elevation,
+    # compute slope
+    gscript.run_command(
+        'r.slope.aspect',
+        elevation=elevation,
+        slope=slope,
+        overwrite=True)
+
+    # grow border to fix edge effects of moving window computations
+    gscript.run_command(
+        'r.grow.distance',
+        input=slope,
+        value=grow_slope,
+        overwrite=True)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{slope}={grow_slope}".format(
             slope=slope,
-            overwrite=True)
+            grow_slope=grow_slope),
+        overwrite=True)
 
-        # grow border to fix edge effects of moving window computations
-        gscript.run_command(
-            'r.grow.distance',
-            input=slope,
-            value=grow_slope,
-            overwrite=True)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{slope}={grow_slope}".format(
-                slope=slope,
-                grow_slope=grow_slope),
-            overwrite=True)
+    # compute flow accumulation
+    gscript.run_command(
+        'r.watershed',
+        elevation=elevation,
+        accumulation=flowacc,
+        flags="a",
+        overwrite=True)
+    region = gscript.parse_command(
+        'g.region', flags='g')
+    res = region['nsres']
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{depth}"
+        "=({flowacc}*{res})".format(
+            depth=flow_accumulation,
+            flowacc=flowacc,
+            res=res),
+        overwrite=True)
 
-        # compute flow accumulation
-        gscript.run_command(
-            'r.watershed',
-            elevation=elevation,
-            accumulation=flowacc,
-            flags="a",
-            overwrite=True)
-        region = gscript.parse_command(
-            'g.region', flags='g')
-        res = region['nsres']
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{depth}"
-            "=({flowacc}*{res})".format(
-                depth=flow_accumulation,
-                flowacc=flowacc,
-                res=res),
-            overwrite=True)
-
-        # compute dimensionless topographic factor
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{ls_factor}"
-            "=({m}+1.0)"
-            "*(({flowacc}/22.1)^{m})"
-            "*((sin({slope})/5.14)^{n})".format(
-                ls_factor=ls_factor,
-                m=m,
-                flowacc=flow_accumulation,
-                slope=slope,
-                n=n),
-            overwrite=True)
-
-        # compute sediment flow
-        """E = R * K * LS * C * P
-        where
-        E is average annual soil loss
-        R is erosivity factor
-        K is soil erodibility factor
-        LS is a dimensionless topographic (length-slope) factor
-        C is a dimensionless land cover factor
-        P is a dimensionless prevention measures factor
-        """
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{sedflow}"
-            "={r_factor}"
-            "*{k_factor}"
-            "*{ls_factor}"
-            "*{c_factor}".format(
-                sedflow=sedflow,
-                r_factor=r_factor,
-                k_factor=k_factor,
-                ls_factor=ls_factor,
-                c_factor=c_factor),
-            overwrite=True)
-
-        # convert sediment flow from tons/ha to kg/ms
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{converted_sedflow}"
-            "={sedflow}*{ton_to_kg}/{ha_to_m2}".format(
-                converted_sedflow=erosion,
-                sedflow=sedflow,
-                ton_to_kg=1000.,
-                ha_to_m2=10000.),
-            overwrite=True)
-
-        # set color table
-        gscript.write_command(
-            'r.colors',
-            map=erosion,
-            rules='-',
-            stdin=erosion_colors)
-
-        # remove temporary maps
-        gscript.run_command(
-            'g.remove',
-            type='raster',
-            name=['slope',
-                'grow_slope',
-                'flowacc',
-                'sedflow'],
-            flags='f')
-
-
-    def usped(elevation, erosion, flow_accumulation,
-        r_factor, c_factor, k_factor, ls_factor, m, n):
-        """The USPED (Unit Stream Power Erosion Deposition) model
-        for transport limited erosion regimes"""
-
-        # assign variables
-        slope = 'slope'
-        aspect = 'aspect'
-        flowacc = 'flowacc'
-        qsx = 'qsx'
-        qsxdx = 'qsxdx'
-        qsy = 'qsy'
-        qsydy = 'qsydy'
-        grow_slope = 'grow_slope'
-        grow_aspect = 'grow_aspect'
-        grow_qsxdx = 'grow_qsxdx'
-        grow_qsydy = 'grow_qsydy'
-        sedflow = 'sedflow'
-        erosion = 'erosion' # kg/m^2s
-
-        # compute slope and aspect
-        gscript.run_command(
-            'r.slope.aspect',
-            elevation=elevation,
+    # compute dimensionless topographic factor
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{ls_factor}"
+        "=({m}+1.0)"
+        "*(({flowacc}/22.1)^{m})"
+        "*((sin({slope})/5.14)^{n})".format(
+            ls_factor=ls_factor,
+            m=m_coeff,
+            flowacc=flow_accumulation,
             slope=slope,
+            n=n_coeff),
+        overwrite=True)
+
+    # compute sediment flow
+    """E = R * K * LS * C * P
+    where
+    E is average annual soil loss
+    R is erosivity factor
+    K is soil erodibility factor
+    LS is a dimensionless topographic (length-slope) factor
+    C is a dimensionless land cover factor
+    P is a dimensionless prevention measures factor
+    """
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{sedflow}"
+        "={r_factor}"
+        "*{k_factor}"
+        "*{ls_factor}"
+        "*{c_factor}".format(
+            sedflow=sedflow,
+            r_factor=r_factor,
+            k_factor=k_factor,
+            ls_factor=ls_factor,
+            c_factor=c_factor),
+        overwrite=True)
+
+    # convert sediment flow from tons/ha to kg/ms
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{converted_sedflow}"
+        "={sedflow}*{ton_to_kg}/{ha_to_m2}".format(
+            converted_sedflow=erosion,
+            sedflow=sedflow,
+            ton_to_kg=1000.,
+            ha_to_m2=10000.),
+        overwrite=True)
+
+    # set color table
+    gscript.write_command(
+        'r.colors',
+        map=erosion,
+        rules='-',
+        stdin=erosion_colors)
+
+    # remove temporary maps
+    gscript.run_command(
+        'g.remove',
+        type='raster',
+        name=['slope',
+              'grow_slope',
+              'flowacc',
+              'sedflow'],
+        flags='f')
+
+
+def usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff):
+    """The USPED (Unit Stream Power Erosion Deposition) model
+    for transport limited erosion regimes"""
+
+    # assign variables
+    slope = 'slope'
+    aspect = 'aspect'
+    flowacc = 'flowacc'
+    qsx = 'qsx'
+    qsxdx = 'qsxdx'
+    qsy = 'qsy'
+    qsydy = 'qsydy'
+    grow_slope = 'grow_slope'
+    grow_aspect = 'grow_aspect'
+    grow_qsxdx = 'grow_qsxdx'
+    grow_qsydy = 'grow_qsydy'
+    sedflow = 'sedflow'
+    sediment_flux = 'sediment_flux'
+
+    # compute slope and aspect
+    gscript.run_command(
+        'r.slope.aspect',
+        elevation=elevation,
+        slope=slope,
+        aspect=aspect,
+        overwrite=True)
+
+    # grow border to fix edge effects of moving window computations
+    gscript.run_command(
+        'r.grow.distance',
+        input=slope,
+        value=grow_slope,
+        overwrite=True)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{slope}={grow_slope}".format(
+            slope=slope,
+            grow_slope=grow_slope),
+        overwrite=True)
+    gscript.run_command(
+        'r.grow.distance',
+        input=aspect,
+        value=grow_aspect,
+        overwrite=True)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{aspect}={grow_aspect}".format(
             aspect=aspect,
-            overwrite=True)
+            grow_aspect=grow_aspect),
+        overwrite=True)
 
-        # grow border to fix edge effects of moving window computations
-        gscript.run_command(
-            'r.grow.distance',
-            input=slope,
-            value=grow_slope,
-            overwrite=True)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{slope}={grow_slope}".format(
-                slope=slope,
-                grow_slope=grow_slope),
-            overwrite=True)
-        gscript.run_command(
-            'r.grow.distance',
-            input=aspect,
-            value=grow_aspect,
-            overwrite=True)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{aspect}={grow_aspect}".format(
-                aspect=aspect,
-                grow_aspect=grow_aspect),
-            overwrite=True)
+    # compute flow accumulation
+    gscript.run_command(
+        'r.watershed',
+        elevation=elevation,
+        accumulation=flowacc,
+        flags="a",
+        overwrite=True)
+    region = gscript.parse_command(
+        'g.region', flags='g')
+    res = region['nsres']
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{depth}"
+        "=({flowacc}*{res})".format(
+            depth=flow_accumulation,
+            flowacc=flowacc,
+            res=res),
+        overwrite=True)
+    # add depression parameter to r.watershed
+    # derive from landcover class
 
-        # compute flow accumulation
-        gscript.run_command(
-            'r.watershed',
-            elevation=elevation,
-            accumulation=flowacc,
-            flags="a",
-            overwrite=True)
-        region = gscript.parse_command(
-            'g.region', flags='g')
-        res = region['nsres']
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{depth}"
-            "=({flowacc}*{res})".format(
-                depth=flow_accumulation,
-                flowacc=flowacc,
-                res=res),
-            overwrite=True)
-        # add depression parameter to r.watershed
-        # derive from landcover class
+    # compute dimensionless topographic factor
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{ls_factor}"
+        "=({flowacc}^{m})*(sin({slope})^{n})".format(
+            ls_factor=ls_factor,
+            m=m_coeff,
+            flowacc=flow_accumulation,
+            slope=slope,
+            n=n_coeff),
+        overwrite=True)
 
-        # compute dimensionless topographic factor
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{ls_factor}"
-            "=({flowacc}^{m})*(sin({slope})^{n})".format(
-                ls_factor=ls_factor,
-                m=m,
-                flowacc=flow_accumulation,
-                slope=slope,
-                n=n),
-            overwrite=True)
+    # compute sediment flow at sediment transport capacity
+    """
+    T = R * K * C * P * LST
+    where
+    T is sediment flow at transport capacity
+    R is rainfall factor
+    K is soil erodibility factor
+    C is a dimensionless land cover factor
+    P is a dimensionless prevention measures factor
+    LST is the topographic component of sediment transport capacity
+    of overland flow
+    """
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{sedflow}"
+        "={r_factor}"
+        "*{k_factor}"
+        "*{c_factor}"
+        "*{ls_factor}".format(
+            r_factor=r_factor,
+            k_factor=k_factor,
+            c_factor=c_factor,
+            ls_factor=ls_factor,
+            sedflow=sedflow),
+        overwrite=True)
 
-        # compute sediment flow at sediment transport capacity
-        """
-        T = R * K * C * P * LST
-        where
-        T is sediment flow at transport capacity
-        R is rainfall factor
-        K is soil erodibility factor
-        C is a dimensionless land cover factor
-        P is a dimensionless prevention measures factor
-        LST is the topographic component of sediment transport capacity
-        of overland flow
-        """
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{sedflow}"
-            "={r_factor}"
-            "*{k_factor}"
-            "*{c_factor}"
-            "*{ls_factor}".format(
-                r_factor=r_factor,
-                k_factor=k_factor,
-                c_factor=c_factor,
-                ls_factor=ls_factor,
-                sedflow=sedflow),
-            overwrite=True)
+    # convert sediment flow from tons/ha to kg/ms
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{converted_sedflow}"
+        "={sedflow}"
+        "*{ton_to_kg}"
+        "/{ha_to_m2}".format(
+            converted_sedflow=sediment_flux,
+            sedflow=sedflow,
+            ton_to_kg=1000.,
+            ha_to_m2=10000.),
+        overwrite=True)
 
-        # convert sediment flow from tons/ha to kg/ms
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{converted_sedflow}"
-            "={sedflow}"
-            "*{ton_to_kg}"
-            "/{ha_to_m2}".format(
-                converted_sedflow=sediment_flux,
-                sedflow=sedflow,
-                ton_to_kg=1000.,
-                ha_to_m2=10000.),
-            overwrite=True)
+    # compute sediment flow rate in x direction (m^2/s)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{qsx}={sedflow}*cos({aspect})".format(
+            sedflow=sediment_flux,
+            aspect=aspect, qsx=qsx),
+        overwrite=True)
 
-        # compute sediment flow rate in x direction (m^2/s)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{qsx}={sedflow}*cos({aspect})".format(
-                sedflow=sediment_flux,
-                aspect=aspect, qsx=qsx),
-            overwrite=True)
+    # compute sediment flow rate in y direction (m^2/s)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{qsy}={sedflow}*sin({aspect})".format(
+            sedflow=sediment_flux,
+            aspect=aspect,
+            qsy=qsy),
+        overwrite=True)
 
-        # compute sediment flow rate in y direction (m^2/s)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{qsy}={sedflow}*sin({aspect})".format(
-                sedflow=sediment_flux,
-                aspect=aspect,
-                qsy=qsy),
-            overwrite=True)
+    # compute change in sediment flow in x direction
+    # as partial derivative of sediment flow field
+    gscript.run_command(
+        'r.slope.aspect',
+        elevation=qsx,
+        dx=qsxdx,
+        overwrite=True)
 
-        # compute change in sediment flow in x direction
-        # as partial derivative of sediment flow field
-        gscript.run_command(
-            'r.slope.aspect',
-            elevation=qsx,
-            dx=qsxdx,
-            overwrite=True)
+    # compute change in sediment flow in y direction
+    # as partial derivative of sediment flow field
+    gscript.run_command(
+        'r.slope.aspect',
+        elevation=qsy,
+        dy=qsydy,
+        overwrite=True)
 
-        # compute change in sediment flow in y direction
-        # as partial derivative of sediment flow field
-        gscript.run_command(
-            'r.slope.aspect',
-            elevation=qsy,
-            dy=qsydy,
-            overwrite=True)
+    # grow border to fix edge effects of moving window computations
+    gscript.run_command(
+        'r.grow.distance',
+        input=qsxdx,
+        value=grow_qsxdx,
+        overwrite=True)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{qsxdx}={grow_qsxdx}".format(
+            qsxdx=qsxdx,
+            grow_qsxdx=grow_qsxdx),
+        overwrite=True)
+    gscript.run_command(
+        'r.grow.distance',
+        input=qsydy,
+        value=grow_qsydy,
+        overwrite=True)
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{qsydy}={grow_qsydy}".format(
+            qsydy=qsydy,
+            grow_qsydy=grow_qsydy),
+        overwrite=True)
 
-        # grow border to fix edge effects of moving window computations
-        gscript.run_command(
-            'r.grow.distance',
-            input=qsxdx,
-            value=grow_qsxdx,
-            overwrite=True)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{qsxdx}={grow_qsxdx}".format(
-                qsxdx=qsxdx,
-                grow_qsxdx=grow_qsxdx),
-            overwrite=True)
-        gscript.run_command(
-            'r.grow.distance',
-            input=qsydy,
-            value=grow_qsydy,
-            overwrite=True)
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{qsydy}={grow_qsydy}".format(
-                qsydy=qsydy,
-                grow_qsydy=grow_qsydy),
-            overwrite=True)
+    # compute net erosion-deposition (kg/m^2s)
+    # as divergence of sediment flow
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{erdep} = {qsxdx} + {qsydy}".format(
+            erdep=erosion,
+            qsxdx=qsxdx,
+            qsydy=qsydy),
+        overwrite=True)
 
-        # compute net erosion-deposition (kg/m^2s)
-        # as divergence of sediment flow
-        gscript.run_command(
-            'r.mapcalc',
-            expression="{erdep} = {qsxdx} + {qsydy}".format(
-                erdep=erosion,
-                qsxdx=qsxdx,
-                qsydy=qsydy),
-            overwrite=True)
+    # set color table
+    gscript.write_command(
+        'r.colors',
+        map=erosion,
+        rules='-',
+        stdin=erosion_colors)
 
-        # set color table
-        gscript.write_command(
-            'r.colors',
-            map=erosion,
-            rules='-',
-            stdin=erosion_colors)
-
-        # remove temporary maps
-        gscript.run_command(
-            'g.remove',
-            type='raster',
-            name=['slope',
-                'aspect',
-                'flowacc',
-                'qsx',
-                'qsy',
-                'qsxdx',
-                'qsydy',
-                'grow_slope',
-                'grow_aspect',
-                'grow_qsxdx',
-                'grow_qsydy',,
-                'sedflow'],
-            flags='f')
+    # remove temporary maps
+    gscript.run_command(
+        'g.remove',
+        type='raster',
+        name=['slope',
+              'aspect',
+              'flowacc',
+              'qsx',
+              'qsy',
+              'qsxdx',
+              'qsydy',
+              'grow_slope',
+              'grow_aspect',
+              'grow_qsxdx',
+              'grow_qsydy',
+              'sedflow',
+              'sediment_flux'],
+        flags='f')
 
 
 def cleanup():
@@ -649,19 +642,20 @@ def cleanup():
             'g.remove',
             type='raster',
             name=['rain_volume',
-                'rain_energy',
-                'slope',
-                'aspect',
-                'flowacc',
-                'qsx',
-                'qsy',
-                'qsxdx',
-                'qsydy',
-                'grow_slope',
-                'grow_aspect',
-                'grow_qsxdx',
-                'grow_qsydy',,
-                'sedflow'],
+                  'rain_energy',
+                  'slope',
+                  'aspect',
+                  'flowacc',
+                  'qsx',
+                  'qsy',
+                  'qsxdx',
+                  'qsydy',
+                  'grow_slope',
+                  'grow_aspect',
+                  'grow_qsxdx',
+                  'grow_qsydy',
+                  'sedflow',
+                  'sediment_flux'],
             flags='f')
 
     except CalledModuleError:

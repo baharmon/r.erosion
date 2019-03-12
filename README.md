@@ -2,7 +2,7 @@
 
 # r.erosion
 
-*r.erosion* is a add-on module for modeling erosion in
+*r.erosion* is an add-on module for modeling erosion in
 [GRASS GIS](https://grass.osgeo.org/) with either
 the Revised Universal Soil Loss Equation for Complex Terrain (RUSLE3D) model
 or the Unit Stream Power Erosion Deposition (USPED) model.

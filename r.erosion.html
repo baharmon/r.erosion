@@ -1,0 +1,56 @@
+<h2>DESCRIPTION</h2>
+
+<p>
+<i>r.erosion</i> models erosion with either
+the Revised Universal Soil Loss Equation for Complex Terrain (RUSLE3D) model
+or the Unit Stream Power Erosion Deposition (USPED) model.
+</p>
+
+<h2>EXAMPLES</h2>
+
+Clone or download the
+<a href="https://github.com/baharmon/landscape_evolution_dataset">sample dataset</a>
+with a time series of lidar-based digital elevation models and orthoimagery
+for a highly eroded subwatershed of Patterson Branch Creek,
+Fort Bragg, NC, USA.
+
+Run <i>r.erosion</i> with the RUSLE model using the defaults.
+
+<div class="code"><pre>
+g.mapset -c mapset=rusle3d location=nc_spm_evolution
+g.region region=region res=0.3
+r.mask vector=watershed
+r.erosion elevation=elevation_2016 model=rusle
+</pre></div>
+
+
+<h2>REFERENCES</h2>
+
+<ul>
+<li>
+Harmon, B., Mitasova, H., Petrasova, A., Petras, V., 2019.
+<a href="https://github.com/baharmon/landscape_evolution/raw/master/tex/landscape_evolution.pdf">r.sim.terrain: a dynamic landscape evolution model</a>.
+</li>
+<li>
+Mitasova H., Barton M., Ullah I., Hofierka J., Harmon R.S., 2013.
+<a href="http://www.sciencedirect.com/science/article/pii/B978012374739600052X">3.9 GIS-Based Soil Erosion Modeling</a>.
+In J. F. Shroder, ed. Treatise on Geomorphology. San Diego: Academic Press, pp. 228-258.
+DOI: <a href="http://dx.doi.org/10.1016/B978-0-12-374739-6.00052-X">http://dx.doi.org/10.1016/B978-0-12-374739-6.00052-X</a>.
+</li>
+</ul>
+
+<h2>SEE ALSO</h2>
+
+<em>
+<a href="r.watershed.html">r.watershed</a>
+</em>
+
+<h2>AUTHORS</h2>
+
+<p>
+Brendan A. Harmon<br>
+Louisiana State University<br>
+<i><a href="mailto:brendan.harmon@gmail.com">brendan.harmon@gmail.com</a></i>
+</p>
+
+<p><i>Last changed: $Date: 2014-08-14 11:34:43 -0400 (Thu, 14 Aug 2014) $</i>

@@ -197,7 +197,7 @@ def main():
     # check for alternative input parameters
     if not r_factor:
         if not r_factor_value:
-            # compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1)
+            # compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1 yr^-1)
             r_factor = event_based_r_factor(rain_intensity, rain_duration)
         else:
             r_factor = 'r_factor'
@@ -220,15 +220,17 @@ def main():
 
     # determine type of model and run
     if model == "rusle":
-        rusle(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff)
+        rusle(elevation, erosion, flow_accumulation, r_factor,
+              c_factor, k_factor, ls_factor, m_coeff, n_coeff)
     if model == "usped":
-        usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff)
+        usped(elevation, erosion, flow_accumulation, r_factor,
+              c_factor, k_factor, ls_factor, m_coeff, n_coeff)
     atexit.register(cleanup)
     sys.exit(0)
 
 
 def event_based_r_factor(rain_intensity, rain_duration):
-    """compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1)"""
+    """compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1 yr^-1)"""
 
     # assign variables
     rain_energy = 'rain_energy'
@@ -277,16 +279,22 @@ def event_based_r_factor(rain_intensity, rain_duration):
             rain_intensity=rain_intensity),
         overwrite=True)
 
-    # multiply by rainfall duration in seconds (MJ mm ha^-1 hr^-1 s^-1)
+    # derive R factor (MJ mm ha^-1 hr^-1 yr^1)
+    """
+    R factor (MJ mm ha^-1 hr^-1 yr^1)
+    = EI (MJ mm ha^-1 hr^-1)
+    / (rainfall interval (min)
+    * (1 yr / 525600 min))
+    """
     gscript.run_command(
         'r.mapcalc',
         expression="{r_factor}"
         "={erosivity}"
-        "/({rain_duration}"
-        "*60.)".format(
+        "/({rain_interval}"
+        "/525600.)".format(
             r_factor=r_factor,
             erosivity=erosivity,
-            rain_duration=rain_duration),
+            rain_interval=rain_duration),
         overwrite=True)
 
     # remove temporary maps
@@ -301,7 +309,8 @@ def event_based_r_factor(rain_intensity, rain_duration):
     return r_factor
 
 
-def rusle(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, ls_factor, m_coeff, n_coeff):
+def rusle(elevation, erosion, flow_accumulation, r_factor,
+          c_factor, k_factor, ls_factor, m_coeff, n_coeff):
     """The RUSLE3D
     (Revised Universal Soil Loss Equation for Complex Terrain) model
     for detachment limited soil erosion regimes"""
@@ -389,15 +398,19 @@ def rusle(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, l
             c_factor=c_factor),
         overwrite=True)
 
-    # convert sediment flow from tons/ha to kg/ms
+    # convert sediment flow from tons/ha/yr to kg/m^2s
     gscript.run_command(
         'r.mapcalc',
         expression="{converted_sedflow}"
-        "={sedflow}*{ton_to_kg}/{ha_to_m2}".format(
+        "={sedflow}"
+        "*{ton_to_kg}"
+        "/{ha_to_m2}"
+        "/{yr_to_s}".format(
             converted_sedflow=erosion,
             sedflow=sedflow,
             ton_to_kg=1000.,
-            ha_to_m2=10000.),
+            ha_to_m2=10000.,
+            yr_to_s=31557600.),
         overwrite=True)
 
     # set color table
@@ -528,17 +541,19 @@ def usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, l
             sedflow=sedflow),
         overwrite=True)
 
-    # convert sediment flow from tons/ha to kg/ms
+    # convert sediment flow from tons/ha/yr to kg/m^2s
     gscript.run_command(
         'r.mapcalc',
         expression="{converted_sedflow}"
         "={sedflow}"
         "*{ton_to_kg}"
-        "/{ha_to_m2}".format(
+        "/{ha_to_m2}"
+        "/{yr_to_s}".format(
             converted_sedflow=sediment_flux,
             sedflow=sedflow,
             ton_to_kg=1000.,
-            ha_to_m2=10000.),
+            ha_to_m2=10000.,
+            yr_to_s=31557600.),
         overwrite=True)
 
     # compute sediment flow rate in x direction (m^2/s)

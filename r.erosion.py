@@ -279,23 +279,35 @@ def event_based_r_factor(rain_intensity, rain_duration):
             rain_intensity=rain_intensity),
         overwrite=True)
 
-    # derive R factor (MJ mm ha^-1 hr^-1 yr^1)
-    """
-    R factor (MJ mm ha^-1 hr^-1 yr^1)
-    = EI (MJ mm ha^-1 hr^-1)
-    / (rainfall interval (min)
-    * (1 yr / 525600 min))
-    """
+    # multiply by rainfall duration in seconds (MJ mm ha^-1 hr^-1 s^-1)
     gscript.run_command(
         'r.mapcalc',
         expression="{r_factor}"
         "={erosivity}"
-        "/({rain_interval}"
-        "/525600.)".format(
+        "/({rain_duration}"
+        "*60.)".format(
             r_factor=r_factor,
             erosivity=erosivity,
-            rain_interval=rain_duration),
+            rain_duration=rain_duration),
         overwrite=True)
+
+    # # derive R factor (MJ mm ha^-1 hr^-1 yr^1)
+    # """
+    # R factor (MJ mm ha^-1 hr^-1 yr^1)
+    # = EI (MJ mm ha^-1 hr^-1)
+    # / (rainfall interval (min)
+    # * (1 yr / 525600 min))
+    # """
+    # gscript.run_command(
+    #     'r.mapcalc',
+    #     expression="{r_factor}"
+    #     "={erosivity}"
+    #     "/({rain_duration}"
+    #     "/525600.)".format(
+    #         r_factor=r_factor,
+    #         erosivity=erosivity,
+    #         rain_duration=rain_duration),
+    #     overwrite=True)
 
     # remove temporary maps
     gscript.run_command(
@@ -398,20 +410,31 @@ def rusle(elevation, erosion, flow_accumulation, r_factor,
             c_factor=c_factor),
         overwrite=True)
 
-    # convert sediment flow from tons/ha/yr to kg/m^2s
+    # convert sediment flow from tons/ha to kg/ms
     gscript.run_command(
         'r.mapcalc',
         expression="{converted_sedflow}"
-        "={sedflow}"
-        "*{ton_to_kg}"
-        "/{ha_to_m2}"
-        "/{yr_to_s}".format(
+        "={sedflow}*{ton_to_kg}/{ha_to_m2}".format(
             converted_sedflow=erosion,
             sedflow=sedflow,
             ton_to_kg=1000.,
-            ha_to_m2=10000.,
-            yr_to_s=31557600.),
+            ha_to_m2=10000.),
         overwrite=True)
+
+    # # convert sediment flow from tons/ha/yr to kg/m^2s
+    # gscript.run_command(
+    #     'r.mapcalc',
+    #     expression="{converted_sedflow}"
+    #     "={sedflow}"
+    #     "*{ton_to_kg}"
+    #     "/{ha_to_m2}"
+    #     "/{yr_to_s}".format(
+    #         converted_sedflow=erosion,
+    #         sedflow=sedflow,
+    #         ton_to_kg=1000.,
+    #         ha_to_m2=10000.,
+    #         yr_to_s=31557600.),
+    #     overwrite=True)
 
     # set color table
     gscript.write_command(
@@ -541,20 +564,33 @@ def usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, l
             sedflow=sedflow),
         overwrite=True)
 
-    # convert sediment flow from tons/ha/yr to kg/m^2s
+    # convert sediment flow from tons/ha to kg/ms
     gscript.run_command(
         'r.mapcalc',
         expression="{converted_sedflow}"
         "={sedflow}"
         "*{ton_to_kg}"
-        "/{ha_to_m2}"
-        "/{yr_to_s}".format(
+        "/{ha_to_m2}".format(
             converted_sedflow=sediment_flux,
             sedflow=sedflow,
             ton_to_kg=1000.,
-            ha_to_m2=10000.,
-            yr_to_s=31557600.),
+            ha_to_m2=10000.),
         overwrite=True)
+
+    # # convert sediment flow from tons/ha/yr to kg/m^2s
+    # gscript.run_command(
+    #     'r.mapcalc',
+    #     expression="{converted_sedflow}"
+    #     "={sedflow}"
+    #     "*{ton_to_kg}"
+    #     "/{ha_to_m2}"
+    #     "/{yr_to_s}".format(
+    #         converted_sedflow=sediment_flux,
+    #         sedflow=sedflow,
+    #         ton_to_kg=1000.,
+    #         ha_to_m2=10000.,
+    #         yr_to_s=31557600.),
+    #     overwrite=True)
 
     # compute sediment flow rate in x direction (m^2/s)
     gscript.run_command(

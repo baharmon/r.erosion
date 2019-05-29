@@ -558,6 +558,10 @@ def usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, l
             flowacc=flowacc,
             res=res),
         overwrite=True)
+    gscript.run_command(
+        'r.colors',
+        map=flow_accumulation,
+        raster=flowacc)
     # add depression parameter to r.watershed
     # derive from landcover class
 

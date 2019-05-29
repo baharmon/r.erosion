@@ -176,6 +176,26 @@ erosion_colors = """\
 100% black
 """
 
+sedflux_colors = """\
+0 255:255:255
+0.001 255:255:0
+0.1 255:127:0
+1 191:127:63
+100% 0:0:0
+nv 255:255:255
+default 255:255:255
+"""
+
+lsfactor_colors = """\
+0 white
+0.01 #FFFFD6
+0.02 #FDD995
+0.1 #FD993E
+0.4 #D86026
+1 #983517
+100% #652915
+"""
+
 def main():
     options, flags = gscript.parser()
     elevation = options['elevation']
@@ -442,12 +462,17 @@ def rusle(elevation, erosion, flow_accumulation, r_factor,
             yr_to_s=31557600.),
         overwrite=True)
 
-    # set color table
+    # set color tables
+    gscript.write_command(
+        'r.colors',
+        map=ls_factor,
+        rules='-',
+        stdin=lsfactor_colors)
     gscript.write_command(
         'r.colors',
         map=erosion,
         rules='-',
-        stdin=erosion_colors)
+        stdin=sedflux_colors)
 
     # remove temporary maps
     gscript.run_command(
@@ -570,33 +595,33 @@ def usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, l
             sedflow=sedflow),
         overwrite=True)
 
-    # convert sediment flow from tons/ha to kg/m^2
-    gscript.run_command(
-        'r.mapcalc',
-        expression="{converted_sedflow}"
-        "={sedflow}"
-        "*{ton_to_kg}"
-        "/{ha_to_m2}".format(
-            converted_sedflow=sediment_flux,
-            sedflow=sedflow,
-            ton_to_kg=1000.,
-            ha_to_m2=10000.),
-        overwrite=True)
-
-    # # convert sediment flow from tons/ha/yr to kg/m^2s
+    # # convert sediment flow from tons/ha/s to kg/m^2/s
     # gscript.run_command(
     #     'r.mapcalc',
     #     expression="{converted_sedflow}"
     #     "={sedflow}"
     #     "*{ton_to_kg}"
-    #     "/{ha_to_m2}"
-    #     "/{yr_to_s}".format(
+    #     "/{ha_to_m2}".format(
     #         converted_sedflow=sediment_flux,
     #         sedflow=sedflow,
     #         ton_to_kg=1000.,
-    #         ha_to_m2=10000.,
-    #         yr_to_s=31557600.),
+    #         ha_to_m2=10000.),
     #     overwrite=True)
+
+    # convert sediment flow from tons/ha/yr to kg/m^2s
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{converted_sedflow}"
+        "={sedflow}"
+        "*{ton_to_kg}"
+        "/{ha_to_m2}"
+        "/{yr_to_s}".format(
+            converted_sedflow=sediment_flux,
+            sedflow=sedflow,
+            ton_to_kg=1000.,
+            ha_to_m2=10000.,
+            yr_to_s=31557600.),
+        overwrite=True)
 
     # compute sediment flow rate in x direction (m^2/s)
     gscript.run_command(
@@ -665,7 +690,12 @@ def usped(elevation, erosion, flow_accumulation, r_factor, c_factor, k_factor, l
             qsydy=qsydy),
         overwrite=True)
 
-    # set color table
+    # set color tables
+    gscript.write_command(
+        'r.colors',
+        map=ls_factor,
+        rules='-',
+        stdin=lsfactor_colors)
     gscript.write_command(
         'r.colors',
         map=erosion,

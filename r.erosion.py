@@ -397,6 +397,10 @@ def rusle(elevation, erosion, flow_accumulation, r_factor,
             flowacc=flowacc,
             res=res),
         overwrite=True)
+    gscript.run_command(
+        'r.colors',
+        map=flow_accumulation,
+        raster=flowacc)
 
     # compute dimensionless topographic factor
     gscript.run_command(

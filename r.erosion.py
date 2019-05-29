@@ -303,7 +303,7 @@ def event_based_r_factor(rain_intensity, rain_duration):
         expression="{r_factor}"
         "={erosivity}"
         "/({rain_duration}"
-        "*525600.)".format(
+        "/525600.)".format(
             r_factor=r_factor,
             erosivity=erosivity,
             rain_duration=rain_duration),

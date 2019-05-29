@@ -7,6 +7,11 @@
 the Revised Universal Soil Loss Equation for Complex Terrain (RUSLE3D) model
 or the Unit Stream Power Erosion Deposition (USPED) model.
 
+Flow accumulation (cells) | Erosion with RUSLE3D (kg/ms^2)
+:-------------------------:|:-------------------------:
+<img src="images/flow_accumulation_2012.png"> | <img src="images/rusle_erosion_2012.png">
+
+
 ## Installation
 * Launch GRASS GIS
 * Install using the GRASS Console / Command Line Interface (CLI) with

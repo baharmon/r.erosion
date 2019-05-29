@@ -195,16 +195,27 @@ def main():
     n_coeff = options['n_coeff']
 
     # check for alternative input parameters
-    if not r_factor:
-        if not r_factor_value:
-            # compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1 yr^-1)
-            r_factor = event_based_r_factor(rain_intensity, rain_duration)
-        else:
+    if not rain_intensity:
+        if not r_factor:
             r_factor = 'r_factor'
             gscript.run_command(
                 'r.mapcalc',
                 expression="r_factor = {r_factor_value}".format(**locals()),
                 overwrite=True)
+    else:
+        # compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1 yr^-1)
+        r_factor = event_based_r_factor(rain_intensity, rain_duration)
+
+    # if not r_factor:
+    #     if not r_factor_value:
+    #         # compute event-based erosivity (R) factor (MJ mm ha^-1 hr^-1 yr^-1)
+    #         r_factor = event_based_r_factor(rain_intensity, rain_duration)
+    #     else:
+    #         r_factor = 'r_factor'
+    #         gscript.run_command(
+    #             'r.mapcalc',
+    #             expression="r_factor = {r_factor_value}".format(**locals()),
+    #             overwrite=True)
     if not c_factor:
         c_factor = 'c_factor'
         gscript.run_command(

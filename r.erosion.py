@@ -279,41 +279,41 @@ def event_based_r_factor(rain_intensity, rain_duration):
             rain_intensity=rain_intensity),
         overwrite=True)
 
-    # derive R factor (MJ mm ha^-1 hr^-1 s^-1)
-    """
-    R factor (MJ mm ha^-1 hr^-1 s^-1)
-    = EI (MJ mm ha^-1 hr^-1)
-    / (rainfall interval (min)
-    * (1 min / 60 sec))
-    """
-    gscript.run_command(
-        'r.mapcalc',
-        expression="{r_factor}"
-        "={erosivity}"
-        "/({rain_duration}"
-        "/60.)".format(
-            r_factor=r_factor,
-            erosivity=erosivity,
-            rain_duration=rain_duration),
-        overwrite=True)
-
-    # # derive R factor (MJ mm ha^-1 hr^-1 yr^-1)
+    # # derive R factor (MJ mm ha^-1 hr^-1 s^-1)
     # """
-    # R factor (MJ mm ha^-1 hr^-1 yr^-1)
+    # R factor (MJ mm ha^-1 hr^-1 s^-1)
     # = EI (MJ mm ha^-1 hr^-1)
     # / (rainfall interval (min)
-    # * (1 yr / 525600 min))
+    # * (1 min / 60 sec))
     # """
     # gscript.run_command(
     #     'r.mapcalc',
     #     expression="{r_factor}"
     #     "={erosivity}"
     #     "/({rain_duration}"
-    #     "/525600.)".format(
+    #     "/60.)".format(
     #         r_factor=r_factor,
     #         erosivity=erosivity,
     #         rain_duration=rain_duration),
     #     overwrite=True)
+
+    # derive R factor (MJ mm ha^-1 hr^-1 yr^-1)
+    """
+    R factor (MJ mm ha^-1 hr^-1 yr^-1)
+    = EI (MJ mm ha^-1 hr^-1)
+    / (rainfall interval (min)
+    * (1 yr / 525600 min))
+    """
+    gscript.run_command(
+        'r.mapcalc',
+        expression="{r_factor}"
+        "={erosivity}"
+        "/({rain_duration}"
+        "/525600.)".format(
+            r_factor=r_factor,
+            erosivity=erosivity,
+            rain_duration=rain_duration),
+        overwrite=True)
 
     # remove temporary maps
     gscript.run_command(
